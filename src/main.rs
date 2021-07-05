@@ -98,20 +98,12 @@ unsafe fn read_u8(addr: usize, mem_file: &mut File) -> u8 {
 }
 
 unsafe fn read_string(addr: usize, mem_file: &mut File) -> String {
-    let mut buf = Vec::new();
-    let mut i = 0;
     unsafe {
-        loop {
-            let data = read_u8(addr + i, mem_file);
-            if data == 0 {
-                break;
-            }
-
-            i += 1;
-            buf.push(data);
-        }
-
-        String::from_utf8_unchecked(buf)
+        let mut buf = Vec::with_capacity(100);
+        MemPtr::new(addr).read_into(buf.as_mut_ptr(), 100, mem_file);
+        buf.set_len(100);
+        let data = buf.into_iter().take_while(|&c| c != 0).collect::<Vec<_>>();
+        String::from_utf8_unchecked(data)
     }
 }
 
@@ -324,26 +316,6 @@ impl Celeste {
     }
 }
 
-fn main() {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-
-    stdout.lock().write(b"Enter Celeste PID: ").unwrap();
-    stdout.lock().flush().unwrap();
-
-    let mut line = String::new();
-    stdin.lock().read_line(&mut line).unwrap();
-
-    let pid = line
-        .trim_end()
-        .parse::<i32>()
-        .expect("enter a number u dingus");
-
-    let mem_file = load_mem(pid);
-
-    dump_info_loop(mem_file);
-}
-
 fn load_mem(pid: i32) -> File {
     let path = PathBuf::from(format!("/proc/{}/mem", pid));
     File::open(path).expect(&format!("Unable to open mem file for process {}", pid))
@@ -521,9 +493,27 @@ fn dump_info_loop(mut mem_file: File) {
             let data = dump.as_bytes();
             output.write_all(&data).expect("Unable to overwrite file");
 
-            // try and target 16ms loops
-            let duration = (time::Instant::now() - start).as_secs_f64() * 1000_f64;
-            thread::sleep(Duration::from_millis(16 - duration.ceil() as u64));
+            thread::sleep(Duration::from_millis(12));
         }
     }
+}
+
+fn main() {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+
+    stdout.lock().write(b"Enter Celeste PID: ").unwrap();
+    stdout.lock().flush().unwrap();
+
+    let mut line = String::new();
+    stdin.lock().read_line(&mut line).unwrap();
+
+    let pid = line
+        .trim_end()
+        .parse::<i32>()
+        .expect("enter a number u dingus");
+
+    let mem_file = load_mem(pid);
+
+    dump_info_loop(mem_file);
 }
