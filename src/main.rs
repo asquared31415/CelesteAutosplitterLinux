@@ -1,10 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{self, BufRead, Read, Seek, SeekFrom, Write},
     mem,
-    path::PathBuf,
+    path::{Path, PathBuf},
     thread,
     time::{self, Duration},
     usize,
@@ -498,20 +498,54 @@ fn dump_info_loop(mut mem_file: File) {
     }
 }
 
+fn find_celeste() -> i32 {
+    for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
+        if let Ok(dir) = dir {
+            if let Ok(file_type) = dir.file_type() {
+                if file_type.is_dir() {
+                    let name = dir.file_name().into_string().unwrap();
+                    if name.chars().all(|c| ('0'..='9').contains(&c)) {
+                        if let Ok(path) = fs::read_link(&format!("/proc/{}/exe", name)) {
+                            if path
+                                .into_os_string()
+                                .into_string()
+                                .unwrap()
+                                .contains("Celeste.bin.x86_64")
+                            {
+                                return str::parse(&name).unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    -1
+}
+
 fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    stdout.lock().write(b"Enter Celeste PID: ").unwrap();
-    stdout.lock().flush().unwrap();
+    let found_pid = find_celeste();
 
-    let mut line = String::new();
-    stdin.lock().read_line(&mut line).unwrap();
+    let pid = if found_pid != -1 {
+        found_pid
+    } else {
+        stdout
+            .lock()
+            .write(b"Unable to find Celeste, please enter its PID: ")
+            .unwrap();
+        stdout.lock().flush().unwrap();
 
-    let pid = line
-        .trim_end()
-        .parse::<i32>()
-        .expect("enter a number u dingus");
+        let mut line = String::new();
+        stdin.lock().read_line(&mut line).unwrap();
+
+        line.trim_end()
+            .parse::<i32>()
+            .expect("enter a number u dingus")
+    };
 
     let mem_file = load_mem(pid);
 
