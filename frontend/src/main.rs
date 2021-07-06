@@ -1,4 +1,11 @@
-use std::io::{self, BufRead, Write};
+use std::{
+    fs::File,
+    io::{self, BufRead, Seek, SeekFrom, Write},
+    thread,
+    time::Duration,
+};
+
+use celeste_autosplit_tracer::Celeste;
 
 fn main() {
     let stdin = io::stdin();
@@ -23,9 +30,22 @@ fn main() {
             .expect("enter a number u dingus")
     };
 
-    let mem_file = celeste_autosplit_tracer::load_mem(pid);
-
     const OUTPUT_FILE: &str = "autosplitterinfo";
+    let mut output = File::create(OUTPUT_FILE).expect("Could not create output file");
 
-    celeste_autosplit_tracer::dump_info_loop(OUTPUT_FILE, mem_file);
+    let mut mem_file = celeste_autosplit_tracer::load_mem(pid);
+    let celeste = Celeste::new(&mut mem_file);
+
+    loop {
+        let dump = celeste.get_data(&mut mem_file);
+
+        output
+            .seek(SeekFrom::Start(0))
+            .expect("Unable to overwrite file");
+
+        let data = dump.as_bytes();
+        output.write_all(&data).expect("Unable to overwrite file");
+
+        thread::sleep(Duration::from_millis(12));
+    }
 }

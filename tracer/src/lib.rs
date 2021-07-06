@@ -4,23 +4,23 @@
 
 use std::{
     fs::{self, File},
-    io::{self, BufRead, Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
     mem,
     path::{Path, PathBuf},
     thread,
-    time::{self, Duration},
+    time::Duration,
     usize,
 };
 
 struct MemPtr(usize);
 
 impl MemPtr {
-    pub fn new(addr: usize) -> Self {
+    fn new(addr: usize) -> Self {
         Self(addr)
     }
 
     // SAFETY: a T must be valid at the specified offset (basically ptr read)
-    pub unsafe fn read<T>(&self, mem_file: &mut File) -> T
+    unsafe fn read<T>(&self, mem_file: &mut File) -> T
     where
         T: Copy,
         [(); mem::size_of::<T>()]: ,
@@ -37,7 +37,7 @@ impl MemPtr {
 
     // SAFETY: a T must be valid at the specified offset (basically ptr read)
     // the provided pointer must be valid for writes for the specified number of writes of size T
-    pub unsafe fn read_into<T>(&self, out: &mut [T], mem_file: &mut File)
+    unsafe fn read_into<T>(&self, out: &mut [T], mem_file: &mut File)
     where
         T: Copy,
     {
@@ -77,7 +77,7 @@ unsafe fn read_string(addr: usize, mem_file: &mut File) -> String {
     }
 }
 
-pub fn read_boxed_string(instance: usize, mem_file: &mut File) -> String {
+fn read_boxed_string(instance: usize, mem_file: &mut File) -> String {
     unsafe {
         let class = instance_class(instance, mem_file);
         let data_offset = class_field_offset(class, "m_firstChar", mem_file);
@@ -98,11 +98,7 @@ unsafe fn class_name(class: usize, mem_file: &mut File) -> String {
     }
 }
 
-pub unsafe fn lookup_class<S: AsRef<str>>(
-    class_cache: usize,
-    name: S,
-    mem_file: &mut File,
-) -> usize {
+unsafe fn lookup_class<S: AsRef<str>>(class_cache: usize, name: S, mem_file: &mut File) -> usize {
     let target_name = name.as_ref();
     unsafe {
         let cache_table = read_u64(class_cache + 0x20, mem_file) as usize;
@@ -152,7 +148,8 @@ unsafe fn class_static_fields(class: usize, mem_file: &mut File) -> u64 {
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
-pub enum MonoTypeKind {
+#[allow(dead_code)] // the variants are transmuted from u8
+enum MonoTypeKind {
     MonoClassDef = 1,
     MonoClassGTD = 2,
     MonoClassGInst = 3,
@@ -162,11 +159,7 @@ pub enum MonoTypeKind {
 }
 
 impl MonoTypeKind {
-    pub fn to_u8(&self) -> u8 {
-        unsafe { mem::transmute(*self) }
-    }
-
-    pub fn from_u8(v: u8) -> Self {
+    fn from_u8(v: u8) -> Self {
         assert!(v >= 1 && v <= 6, "Value out of range");
         unsafe { mem::transmute(v) }
     }
@@ -178,7 +171,7 @@ fn class_kind(class: usize, mem_file: &mut File) -> MonoTypeKind {
 
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(C)]
-pub struct MonoClassField {
+struct MonoClassField {
     t: u64,
     name: u64,
     parent: u64,
@@ -217,7 +210,7 @@ unsafe fn class_field_offset(class: usize, name: &str, mem_file: &mut File) -> u
     }
 }
 
-pub unsafe fn static_field_u64<S: AsRef<str>>(class: usize, name: S, mem_file: &mut File) -> u64 {
+unsafe fn static_field_u64<S: AsRef<str>>(class: usize, name: S, mem_file: &mut File) -> u64 {
     unsafe {
         let static_data = class_static_fields(class, mem_file);
         let field_offset = class_field_offset(class, name.as_ref(), mem_file);
@@ -225,11 +218,7 @@ pub unsafe fn static_field_u64<S: AsRef<str>>(class: usize, name: S, mem_file: &
     }
 }
 
-pub unsafe fn instance_field_u32<S: AsRef<str>>(
-    instance: usize,
-    name: S,
-    mem_file: &mut File,
-) -> u32 {
+unsafe fn instance_field_u32<S: AsRef<str>>(instance: usize, name: S, mem_file: &mut File) -> u32 {
     unsafe {
         let class = instance_class(instance, mem_file);
         let field_offset = class_field_offset(class, name.as_ref(), mem_file);
@@ -237,11 +226,7 @@ pub unsafe fn instance_field_u32<S: AsRef<str>>(
     }
 }
 
-pub unsafe fn instance_field_u64<S: AsRef<str>>(
-    instance: usize,
-    name: S,
-    mem_file: &mut File,
-) -> u64 {
+unsafe fn instance_field_u64<S: AsRef<str>>(instance: usize, name: S, mem_file: &mut File) -> u64 {
     unsafe {
         let class = instance_class(instance, mem_file);
         let field_offset = class_field_offset(class, name.as_ref(), mem_file);
@@ -249,8 +234,43 @@ pub unsafe fn instance_field_u64<S: AsRef<str>>(
     }
 }
 
+fn locate_autosplitter_info(instance: usize, mem_file: &mut File) -> usize {
+    unsafe { instance_field_u64(instance, "AutoSplitterInfo", mem_file) as usize + 0x10 }
+}
+
+pub fn find_celeste() -> i32 {
+    for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
+        if let Ok(dir) = dir {
+            if let Ok(file_type) = dir.file_type() {
+                if file_type.is_dir() {
+                    let name = dir.file_name().into_string().unwrap();
+                    if name.chars().all(|c| ('0'..='9').contains(&c)) {
+                        if let Ok(path) = fs::read_link(&format!("/proc/{}/exe", name)) {
+                            if path
+                                .into_os_string()
+                                .into_string()
+                                .unwrap()
+                                .contains("Celeste.bin.x86_64")
+                            {
+                                return str::parse(&name).unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    -1
+}
+
+pub fn load_mem(pid: i32) -> File {
+    let path = PathBuf::from(format!("/proc/{}/mem", pid));
+    File::open(path).expect(&format!("Unable to open mem file for process {}", pid))
+}
+
 #[derive(Debug)]
-struct Celeste {
+pub struct Celeste {
     assembly: usize,
     class_cache: usize,
     celeste_class: usize,
@@ -258,10 +278,37 @@ struct Celeste {
     engine_class: usize,
     level_class: usize,
     instance: usize,
+    autosplitter_info: usize,
 }
 
 impl Celeste {
-    pub fn new(domain: usize, mem_file: &mut File) -> Self {
+    fn init(mem_file: &mut File) -> usize {
+        unsafe {
+            //let root_domain_ptr = read_u64(0xA17650, &mut mem_file) as usize;
+            let domains_list = read_u64(0xA17698, mem_file) as usize;
+
+            let first_domain = read_u64(domains_list, mem_file) as usize;
+            let first_domain_name_ptr = read_u64(first_domain + 0xD8, mem_file) as usize;
+            let first_domain_name = read_string(first_domain_name_ptr as usize, mem_file);
+
+            if first_domain_name != "Celeste.exe" {
+                panic!("This is not celeste!");
+            }
+
+            let second_domain = read_u64(domains_list + 8, mem_file) as usize;
+            let second_domain_name_ptr = read_u64(second_domain + 0xD8, mem_file) as usize;
+            // TODO: this could probably cause Bad Things and spicy UB if it doesn't exist
+            // but it does so
+            let second_domain_name = read_string(second_domain_name_ptr as usize, mem_file);
+
+            println!("Connected to {}", second_domain_name);
+            // TODO: fallback to first domain?
+            second_domain
+        }
+    }
+
+    pub fn new(mem_file: &mut File) -> Self {
+        let domain = Self::init(mem_file);
         unsafe {
             let assembly = read_u64(domain + 0xD0, mem_file) as usize;
             let image = read_u64(assembly + 0x60, mem_file) as usize;
@@ -272,6 +319,7 @@ impl Celeste {
             let level_class = lookup_class(class_cache, "Level", mem_file);
 
             let instance = static_field_u64(celeste_class as usize, "Instance", mem_file) as usize;
+            let autosplitter_info = locate_autosplitter_info(instance, mem_file);
 
             Celeste {
                 assembly,
@@ -281,14 +329,88 @@ impl Celeste {
                 engine_class,
                 level_class,
                 instance,
+                autosplitter_info,
             }
         }
     }
-}
 
-pub fn load_mem(pid: i32) -> File {
-    let path = PathBuf::from(format!("/proc/{}/mem", pid));
-    File::open(path).expect(&format!("Unable to open mem file for process {}", pid))
+    pub fn get_data(&self, mem_file: &mut File) -> Dump {
+        unsafe {
+            let asi: AutosplitterInfo = MemPtr::new(self.autosplitter_info).read(mem_file);
+
+            let mut dump = Dump {
+                autosplitter_info: asi,
+                ..Default::default()
+            };
+
+            if asi.level != 0 {
+                dump.level_name = read_boxed_string(asi.level as usize, mem_file);
+            }
+
+            let savedata_ptr = static_field_u64(self.savedata_class, "Instance", mem_file) as usize;
+            if savedata_ptr != 0 {
+                // TODO: reimplmement this w/ result maybe?
+                /*
+                if savedata_ptr != last_savedata_ptr {
+                    // TODO: sleep here to give time to save?
+                    last_savedata_ptr = savedata_ptr;
+                    continue;
+                }
+                */
+
+                dump.death_count = instance_field_u32(savedata_ptr, "TotalDeaths", mem_file);
+
+                if asi.chapter == -1 {
+                    // mode stats = 0?
+                } else {
+                    let areas = instance_field_u64(savedata_ptr, "Areas", mem_file) as usize;
+                    if instance_field_u32(areas, "_size", mem_file) == 11 {
+                        let areas_ptr = instance_field_u64(areas, "_items", mem_file) as usize;
+                        let area_stats =
+                            read_u64(areas_ptr + 0x20 + 8 * asi.chapter as usize, mem_file)
+                                as usize;
+                        let mode_arr =
+                            instance_field_u64(area_stats, "Modes", mem_file) as usize + 0x20;
+                        let mode_stats =
+                            read_u64(mode_arr + 8 * asi.mode as usize, mem_file) as usize;
+                        if mode_stats == 0 {
+                            dump.current_checkpoints = 0;
+                        } else {
+                            let checkpoints =
+                                instance_field_u64(mode_stats, "Checkpoints", mem_file) as usize;
+                            dump.current_checkpoints =
+                                instance_field_u32(checkpoints, "_count", mem_file);
+                        }
+                    } else {
+                        eprintln!("Failed to get areas array");
+                    }
+                }
+            }
+
+            if asi.chapter == -1 {
+                dump.in_cutscene = false;
+            } else {
+                if !asi.chapter_started || asi.chapter_complete {
+                    dump.in_cutscene = false;
+                } else {
+                    let scene = read_u64(
+                        self.instance + class_field_offset(self.engine_class, "scene", mem_file),
+                        mem_file,
+                    ) as usize;
+                    if instance_class(scene, mem_file) == self.level_class {
+                        dump.in_cutscene = read_u8(
+                            scene + class_field_offset(self.level_class, "InCutscene", mem_file),
+                            mem_file,
+                        ) != 0;
+                    } else {
+                        dump.in_cutscene = false;
+                    }
+                }
+            }
+
+            dump
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -342,152 +464,19 @@ impl Dump {
     }
 }
 
-fn locate_autosplitter_info(celeste: &Celeste, mem_file: &mut File) -> usize {
-    unsafe { instance_field_u64(celeste.instance, "AutoSplitterInfo", mem_file) as usize + 0x10 }
-}
-
 pub fn dump_info_loop(output_file: &str, mut mem_file: File) {
     let mut output = File::create(output_file).expect("Could not create output file");
-    unsafe {
-        let root_domain_ptr = read_u64(0xA17650, &mut mem_file) as usize;
-        let domains_list = read_u64(0xA17698, &mut mem_file) as usize;
+    let celeste = Celeste::new(&mut mem_file);
+    loop {
+        let dump = celeste.get_data(&mut mem_file);
 
-        let first_domain = read_u64(domains_list, &mut mem_file) as usize;
-        let first_domain_name_ptr = read_u64(first_domain + 0xD8, &mut mem_file) as usize;
-        let first_domain_name = read_string(first_domain_name_ptr as usize, &mut mem_file);
+        output
+            .seek(SeekFrom::Start(0))
+            .expect("Unable to overwrite file");
 
-        if first_domain_name != "Celeste.exe" {
-            panic!("This is not celeste!");
-        }
+        let data = dump.as_bytes();
+        output.write_all(&data).expect("Unable to overwrite file");
 
-        let second_domain = read_u64(domains_list + 8, &mut mem_file) as usize;
-        let second_domain_name_ptr = read_u64(second_domain + 0xD8, &mut mem_file) as usize;
-        // TODO: this could probably cause Bad Things and spicy UB if it doesn't exist
-        // but it does so
-        let second_domain_name = read_string(second_domain_name_ptr as usize, &mut mem_file);
-
-        println!("Connected to {}", second_domain_name);
-        let celeste_domain = second_domain;
-
-        let celeste = Celeste::new(celeste_domain, &mut mem_file);
-
-        let asi_ptr = locate_autosplitter_info(&celeste, &mut mem_file);
-        let mut last_savedata_ptr = 0;
-        loop {
-            let start = time::Instant::now();
-
-            let asi: AutosplitterInfo = MemPtr::new(asi_ptr).read(&mut mem_file);
-
-            let mut dump = Dump {
-                autosplitter_info: asi,
-                ..Default::default()
-            };
-
-            if asi.level != 0 {
-                dump.level_name = read_boxed_string(asi.level as usize, &mut mem_file);
-            }
-
-            let savedata_ptr =
-                static_field_u64(celeste.savedata_class, "Instance", &mut mem_file) as usize;
-            if savedata_ptr != 0 {
-                if savedata_ptr != last_savedata_ptr {
-                    // TODO: sleep here to give time to save?
-                    last_savedata_ptr = savedata_ptr;
-                    continue;
-                }
-
-                dump.death_count = instance_field_u32(savedata_ptr, "TotalDeaths", &mut mem_file);
-
-                if asi.chapter == -1 {
-                    // mode stats = 0?
-                } else {
-                    let areas = instance_field_u64(savedata_ptr, "Areas", &mut mem_file) as usize;
-                    if instance_field_u32(areas, "_size", &mut mem_file) == 11 {
-                        let areas_ptr = instance_field_u64(areas, "_items", &mut mem_file) as usize;
-                        let area_stats =
-                            read_u64(areas_ptr + 0x20 + 8 * asi.chapter as usize, &mut mem_file)
-                                as usize;
-                        let mode_arr =
-                            instance_field_u64(area_stats, "Modes", &mut mem_file) as usize + 0x20;
-                        let mode_stats =
-                            read_u64(mode_arr + 8 * asi.mode as usize, &mut mem_file) as usize;
-                        if mode_stats == 0 {
-                            dump.current_checkpoints = 0;
-                        } else {
-                            let checkpoints =
-                                instance_field_u64(mode_stats, "Checkpoints", &mut mem_file)
-                                    as usize;
-                            dump.current_checkpoints =
-                                instance_field_u32(checkpoints, "_count", &mut mem_file);
-                        }
-                    } else {
-                        eprintln!("Failed to get areas array");
-                    }
-                }
-            }
-
-            if asi.chapter == -1 {
-                dump.in_cutscene = false;
-            } else {
-                if !asi.chapter_started || asi.chapter_complete {
-                    dump.in_cutscene = false;
-                } else {
-                    let scene = read_u64(
-                        celeste.instance
-                            + class_field_offset(celeste.engine_class, "scene", &mut mem_file),
-                        &mut mem_file,
-                    ) as usize;
-                    if instance_class(scene, &mut mem_file) == celeste.level_class {
-                        dump.in_cutscene = read_u8(
-                            scene
-                                + class_field_offset(
-                                    celeste.level_class,
-                                    "InCutscene",
-                                    &mut mem_file,
-                                ),
-                            &mut mem_file,
-                        ) != 0;
-                    } else {
-                        dump.in_cutscene = false;
-                    }
-                }
-            }
-
-            //dbg!(&dump);
-            output
-                .seek(SeekFrom::Start(0))
-                .expect("Unable to overwrite file");
-
-            let data = dump.as_bytes();
-            output.write_all(&data).expect("Unable to overwrite file");
-
-            thread::sleep(Duration::from_millis(12));
-        }
+        thread::sleep(Duration::from_millis(12));
     }
-}
-
-pub fn find_celeste() -> i32 {
-    for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
-        if let Ok(dir) = dir {
-            if let Ok(file_type) = dir.file_type() {
-                if file_type.is_dir() {
-                    let name = dir.file_name().into_string().unwrap();
-                    if name.chars().all(|c| ('0'..='9').contains(&c)) {
-                        if let Ok(path) = fs::read_link(&format!("/proc/{}/exe", name)) {
-                            if path
-                                .into_os_string()
-                                .into_string()
-                                .unwrap()
-                                .contains("Celeste.bin.x86_64")
-                            {
-                                return str::parse(&name).unwrap();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    -1
 }
