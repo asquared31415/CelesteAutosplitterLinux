@@ -1,3 +1,6 @@
+#![feature(const_evaluatable_checked, const_generics)]
+#![allow(incomplete_features)]
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::{
@@ -21,48 +24,16 @@ impl MemPtr {
     pub unsafe fn read<T>(&self, mem_file: &mut File) -> T
     where
         T: Copy,
+        [(); mem::size_of::<T>()]:,
     {
         mem_file
             .seek(SeekFrom::Start(self.0 as u64))
             .expect("Unable to read memory");
-        let mut buf = vec![0_u8; mem::size_of::<T>()];
+        let mut buf = [0_u8; mem::size_of::<T>()];
         mem_file
             .read_exact(&mut buf)
             .expect(&format!("Unable to read memory at {:#X}", self.0));
-        unsafe { *mem::transmute::<*const u8, *const T>(buf.as_ptr()) }
-    }
-
-    pub unsafe fn read_u8(&self, mem_file: &mut File) -> u8 {
-        mem_file
-            .seek(SeekFrom::Start(self.0 as u64))
-            .expect("Unable to read memory");
-        let mut buf = [0_u8; 1];
-        mem_file
-            .read_exact(&mut buf)
-            .expect(&format!("Unable to read memory at {:#X}", self.0));
-        unsafe { mem::transmute(buf) }
-    }
-
-    pub unsafe fn read_u32(&self, mem_file: &mut File) -> u32 {
-        mem_file
-            .seek(SeekFrom::Start(self.0 as u64))
-            .expect("Unable to read memory");
-        let mut buf = [0_u8; 4];
-        mem_file
-            .read_exact(&mut buf)
-            .expect(&format!("Unable to read memory at {:#X}", self.0));
-        unsafe { mem::transmute(buf) }
-    }
-
-    pub unsafe fn read_u64(&self, mem_file: &mut File) -> u64 {
-        mem_file
-            .seek(SeekFrom::Start(self.0 as u64))
-            .expect("Unable to read memory");
-        let mut buf = [0_u8; 8];
-        mem_file
-            .read_exact(&mut buf)
-            .expect(&format!("Unable to read memory at {:#X}", self.0));
-        unsafe { mem::transmute(buf) }
+        unsafe { *(buf.as_ptr() as *const T) }
     }
 
     // SAFETY: a T must be valid at the specified offset (basically ptr read)
@@ -86,15 +57,15 @@ impl MemPtr {
 }
 
 unsafe fn read_u64(addr: usize, mem_file: &mut File) -> u64 {
-    unsafe { MemPtr::new(addr).read_u64(mem_file) }
+    unsafe { MemPtr::new(addr).read::<u64>(mem_file) }
 }
 
 unsafe fn read_u32(addr: usize, mem_file: &mut File) -> u32 {
-    unsafe { MemPtr::new(addr).read_u32(mem_file) }
+    unsafe { MemPtr::new(addr).read::<u32>(mem_file) }
 }
 
 unsafe fn read_u8(addr: usize, mem_file: &mut File) -> u8 {
-    unsafe { MemPtr::new(addr).read_u8(mem_file) }
+    unsafe { MemPtr::new(addr).read::<u8>(mem_file) }
 }
 
 unsafe fn read_string(addr: usize, mem_file: &mut File) -> String {
