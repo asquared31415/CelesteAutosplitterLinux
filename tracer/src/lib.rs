@@ -238,7 +238,13 @@ fn locate_autosplitter_info(instance: usize, mem_file: &mut File) -> usize {
     unsafe { instance_field_u64(instance, "AutoSplitterInfo", mem_file) as usize + 0x10 }
 }
 
-pub fn find_celeste() -> i32 {
+#[derive(Clone, Copy, Debug)]
+pub enum PIDError {
+    NotFound,
+    IOError,
+}
+
+pub fn find_celeste() -> Result<i32, PIDError> {
     for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
         if let Ok(dir) = dir {
             if let Ok(file_type) = dir.file_type() {
@@ -252,16 +258,20 @@ pub fn find_celeste() -> i32 {
                                 .unwrap()
                                 .contains("Celeste.bin.x86_64")
                             {
-                                return str::parse(&name).unwrap();
+                                return Ok(str::parse(&name).unwrap());
                             }
                         }
                     }
                 }
+            } else {
+                return Err(PIDError::IOError);
             }
+        } else {
+            return Err(PIDError::IOError);
         }
     }
 
-    -1
+    Err(PIDError::NotFound)
 }
 
 pub fn load_mem(pid: i32) -> File {

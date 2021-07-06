@@ -13,9 +13,8 @@ fn main() {
 
     let found_pid = celeste_autosplit_tracer::find_celeste();
 
-    let pid = if found_pid != -1 {
-        found_pid
-    } else {
+    let pid = found_pid.unwrap_or_else(|e| {
+        dbg!(e);
         stdout
             .lock()
             .write(b"Unable to find Celeste, please enter its PID: ")
@@ -28,7 +27,7 @@ fn main() {
         line.trim_end()
             .parse::<i32>()
             .expect("enter a number u dingus")
-    };
+    });
 
     const OUTPUT_FILE: &str = "autosplitterinfo";
     let mut output = File::create(OUTPUT_FILE).expect("Could not create output file");
