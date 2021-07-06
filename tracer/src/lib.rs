@@ -286,7 +286,7 @@ impl Celeste {
     }
 }
 
-fn load_mem(pid: i32) -> File {
+pub fn load_mem(pid: i32) -> File {
     let path = PathBuf::from(format!("/proc/{}/mem", pid));
     File::open(path).expect(&format!("Unable to open mem file for process {}", pid))
 }
@@ -346,10 +346,8 @@ fn locate_autosplitter_info(celeste: &Celeste, mem_file: &mut File) -> usize {
     unsafe { instance_field_u64(celeste.instance, "AutoSplitterInfo", mem_file) as usize + 0x10 }
 }
 
-fn dump_info_loop(mut mem_file: File) {
-    const OUTPUT_FILE: &str = "autosplitterinfo";
-
-    let mut output = File::create(OUTPUT_FILE).expect("Could not create output file");
+pub fn dump_info_loop(output_file: &str, mut mem_file: File) {
+    let mut output = File::create(output_file).expect("Could not create output file");
     unsafe {
         let root_domain_ptr = read_u64(0xA17650, &mut mem_file) as usize;
         let domains_list = read_u64(0xA17698, &mut mem_file) as usize;
@@ -468,7 +466,7 @@ fn dump_info_loop(mut mem_file: File) {
     }
 }
 
-fn find_celeste() -> i32 {
+pub fn find_celeste() -> i32 {
     for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
         if let Ok(dir) = dir {
             if let Ok(file_type) = dir.file_type() {
@@ -492,32 +490,4 @@ fn find_celeste() -> i32 {
     }
 
     -1
-}
-
-fn main() {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-
-    let found_pid = find_celeste();
-
-    let pid = if found_pid != -1 {
-        found_pid
-    } else {
-        stdout
-            .lock()
-            .write(b"Unable to find Celeste, please enter its PID: ")
-            .unwrap();
-        stdout.lock().flush().unwrap();
-
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line).unwrap();
-
-        line.trim_end()
-            .parse::<i32>()
-            .expect("enter a number u dingus")
-    };
-
-    let mem_file = load_mem(pid);
-
-    dump_info_loop(mem_file);
 }

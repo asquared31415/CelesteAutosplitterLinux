@@ -3,5 +3,12 @@
 version = 3
 
 [[package]]
-name = "celeste-autosplit"
+name = "celeste-autosplit-tracer"
 version = "0.1.0"
+
+[[package]]
+name = "frontend"
+version = "0.1.0"
+dependencies = [
+ "celeste-autosplit-tracer",
+]
