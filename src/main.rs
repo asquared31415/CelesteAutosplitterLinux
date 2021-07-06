@@ -1,6 +1,5 @@
 #![feature(const_evaluatable_checked, const_generics)]
 #![allow(incomplete_features)]
-
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::{
@@ -24,7 +23,7 @@ impl MemPtr {
     pub unsafe fn read<T>(&self, mem_file: &mut File) -> T
     where
         T: Copy,
-        [(); mem::size_of::<T>()]:,
+        [(); mem::size_of::<T>()]: ,
     {
         mem_file
             .seek(SeekFrom::Start(self.0 as u64))
@@ -38,7 +37,7 @@ impl MemPtr {
 
     // SAFETY: a T must be valid at the specified offset (basically ptr read)
     // the provided pointer must be valid for writes for the specified number of writes of size T
-    pub unsafe fn read_into<T>(&self, ptr: *mut T, count: usize, mem_file: &mut File)
+    pub unsafe fn read_into<T>(&self, out: &mut [T], mem_file: &mut File)
     where
         T: Copy,
     {
@@ -46,13 +45,13 @@ impl MemPtr {
             .seek(SeekFrom::Start(self.0 as u64))
             .expect("Unable to read memory");
 
-        let mut buf = vec![0_u8; count * mem::size_of::<T>()];
+        let count = out.len();
+        let mut out = unsafe {
+            std::slice::from_raw_parts_mut(out as *mut [T] as *mut u8, count * mem::size_of::<T>())
+        };
         mem_file
-            .read_exact(&mut buf)
+            .read_exact(&mut out)
             .expect(&format!("Unable to read memory at {:#X}", self.0));
-        unsafe {
-            core::ptr::copy_nonoverlapping(buf.as_ptr() as *const T, ptr, count);
-        }
     }
 }
 
@@ -70,8 +69,8 @@ unsafe fn read_u8(addr: usize, mem_file: &mut File) -> u8 {
 
 unsafe fn read_string(addr: usize, mem_file: &mut File) -> String {
     unsafe {
-        let mut buf = Vec::with_capacity(100);
-        MemPtr::new(addr).read_into(buf.as_mut_ptr(), 100, mem_file);
+        let mut buf = vec![0_u8; 100];
+        MemPtr::new(addr).read_into(&mut buf, mem_file);
         buf.set_len(100);
         let data = buf.into_iter().take_while(|&c| c != 0).collect::<Vec<_>>();
         String::from_utf8_unchecked(data)
@@ -85,8 +84,8 @@ pub fn read_boxed_string(instance: usize, mem_file: &mut File) -> String {
         let size_offset = class_field_offset(class, "m_stringLength", mem_file);
         let size = read_u32(instance + size_offset, mem_file) as usize;
 
-        let mut utf16 = Vec::<u16>::with_capacity(size);
-        MemPtr::new(instance + data_offset).read_into(utf16.as_mut_ptr(), size, mem_file);
+        let mut utf16 = vec![0_u16; size];
+        MemPtr::new(instance + data_offset).read_into(&mut utf16, mem_file);
         utf16.set_len(size);
         String::from_utf16_lossy(&utf16)
     }
