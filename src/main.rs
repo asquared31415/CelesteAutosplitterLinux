@@ -107,6 +107,20 @@ unsafe fn read_string(addr: usize, mem_file: &mut File) -> String {
     }
 }
 
+pub fn read_boxed_string(instance: usize, mem_file: &mut File) -> String {
+    unsafe {
+        let class = instance_class(instance, mem_file);
+        let data_offset = class_field_offset(class, "m_firstChar", mem_file);
+        let size_offset = class_field_offset(class, "m_stringLength", mem_file);
+        let size = read_u32(instance + size_offset, mem_file) as usize;
+
+        let mut utf16 = Vec::<u16>::with_capacity(size);
+        MemPtr::new(instance + data_offset).read_into(utf16.as_mut_ptr(), size, mem_file);
+        utf16.set_len(size);
+        String::from_utf16_lossy(&utf16)
+    }
+}
+
 unsafe fn class_name(class: usize, mem_file: &mut File) -> String {
     unsafe {
         let name_ptr = read_u64(class + 0x40, mem_file) as usize;
@@ -262,20 +276,6 @@ pub unsafe fn instance_field_u64<S: AsRef<str>>(
         let class = instance_class(instance, mem_file);
         let field_offset = class_field_offset(class, name.as_ref(), mem_file);
         read_u64(instance + field_offset, mem_file)
-    }
-}
-
-pub fn read_boxed_string(instance: usize, mem_file: &mut File) -> String {
-    unsafe {
-        let class = instance_class(instance, mem_file);
-        let data_offset = class_field_offset(class, "m_firstChar", mem_file);
-        let size_offset = class_field_offset(class, "m_stringLength", mem_file);
-        let size = read_u32(instance + size_offset, mem_file) as usize;
-
-        let mut utf16 = Vec::<u16>::with_capacity(size);
-        MemPtr::new(instance + data_offset).read_into(utf16.as_mut_ptr(), size, mem_file);
-        utf16.set_len(size);
-        String::from_utf16_lossy(&utf16)
     }
 }
 
