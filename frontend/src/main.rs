@@ -32,11 +32,10 @@ fn main() {
     const OUTPUT_FILE: &str = "autosplitterinfo";
     let mut output = File::create(OUTPUT_FILE).expect("Could not create output file");
 
-    let mut mem_file = celeste_autosplit_tracer::load_mem(pid);
-    let celeste = Celeste::new(&mut mem_file);
+    let celeste = Celeste::new(pid);
 
     loop {
-        let dump = celeste.get_data(&mut mem_file);
+        let dump = celeste.get_data();
 
         output
             .seek(SeekFrom::Start(0))
