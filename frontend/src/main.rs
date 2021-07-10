@@ -1,5 +1,3 @@
-#![feature(try_blocks)]
-
 use std::{
     fmt::Debug,
     io::{self, BufRead, Write},
@@ -38,6 +36,49 @@ impl Split {
                 }
             },
             false => false,
+        }
+    }
+
+    fn display_incomplete(&self, info: &cat::Dump) -> String {
+        match &self.kind {
+            SplitKind::Berries(num_berries) => {
+                format!(
+                    "{}/{} Berries",
+                    info.autosplitter_info.file_strawberries, num_berries
+                )
+            }
+            _ => {
+                let ch = self.chapter.to_string();
+                let split_kind = match &self.kind {
+                    SplitKind::Level(level) => &level,
+                    SplitKind::Heart => "Heart",
+                    SplitKind::Casette => "Casette",
+                    _ => unreachable!(),
+                };
+                format!("Ch. {}: {}", ch, split_kind,)
+            }
+        }
+    }
+
+    fn display_complete(&self, finish_time: u64) -> String {
+        let finish_time = std::time::Duration::from_millis(finish_time);
+        match &self.kind {
+            SplitKind::Berries(num_berries) => {
+                format!(
+                    "{}/{} Berries = {:#?}",
+                    num_berries, num_berries, finish_time
+                )
+            }
+            _ => {
+                let ch = self.chapter.to_string();
+                let split_kind = match &self.kind {
+                    SplitKind::Level(level) => &level,
+                    SplitKind::Heart => "Heart",
+                    SplitKind::Casette => "Casette",
+                    _ => unreachable!(),
+                };
+                format!("Ch.{}: {} = {:#?}", ch, split_kind, finish_time)
+            }
         }
     }
 }
@@ -106,32 +147,50 @@ fn main() {
         }
 
         term::clear();
-        term::write(
+        term::writeln(
             format!(
-                "Chapter {} room {}\n",
+                "Chapter {} room {}",
                 dump.autosplitter_info.chapter,
                 dump.level_name()
             ),
             TermColor::Yellow,
             None,
         );
-        term::write(
-            format!("Chapter time: {}\n", dump.autosplitter_info.chapter_time()),
+        term::writeln(
+            format!("Chapter time: {}", dump.autosplitter_info.chapter_time()),
             TermColor::Green,
             None,
         );
-        term::write(
-            format!("File time: {}\n", dump.autosplitter_info.file_time()),
+        term::writeln(
+            format!("File time: {}", dump.autosplitter_info.file_time()),
             TermColor::BrightMagenta,
             None,
         );
-        term::write(
-            format!("Deaths: {}\n", dump.death_count),
+        term::writeln(
+            format!("Deaths: {}", dump.death_count),
             TermColor::Red,
             None,
         );
 
-        term::write(format!("{:?}\n", &splits), TermColor::White, None);
+        term::writeln(
+            "\n################\nCompleted Splits\n################\n",
+            TermColor::White,
+            TermColor::Gray,
+        );
+
+        for split in splits.completed_splits.iter() {
+            term::writeln(split.0.display_complete(split.1), TermColor::White, None);
+        }
+
+        term::writeln(
+            "\n###########\nTODO Splits\n###########\n",
+            TermColor::White,
+            TermColor::Gray,
+        );
+
+        for split in splits.todo_splits.iter() {
+            term::writeln(split.display_incomplete(&dump), TermColor::White, None);
+        }
 
         thread::sleep(Duration::from_millis(12));
     }

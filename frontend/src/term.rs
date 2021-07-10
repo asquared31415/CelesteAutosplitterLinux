@@ -22,13 +22,19 @@ pub fn reset_term_style() {
         .expect("Unable to clear terminal");
 }
 
-pub fn write<S: AsRef<str>>(s: S, text_color: TermColor, bg_color: Option<TermColor>) {
+pub fn write<S: AsRef<str>>(s: S, text_color: TermColor, bg_color: impl Into<Option<TermColor>>) {
+    let bg_color = bg_color.into();
     print!("\x1B[{}m", text_color.as_code());
     if let Some(bg_color) = bg_color {
         print!("\x1B[{}m", bg_color.as_code() + 10);
     }
     print!("{}", s.as_ref());
     reset_term_style();
+}
+
+pub fn writeln<S: AsRef<str>>(s: S, text_color: TermColor, bg_color: impl Into<Option<TermColor>>) {
+    write(s, text_color, bg_color);
+    write("\n", TermColor::White, None);
 }
 
 #[allow(dead_code)]
