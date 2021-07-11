@@ -12,22 +12,24 @@ mod term;
 use crate::term::TermColor;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Split {
+    pub name: Option<String>,
     pub chapter: i32,
-    pub kind: SplitKind,
+    pub split_kind: SplitKind,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "kind_data")]
 pub enum SplitKind {
-    Level(String),
     Heart,
     Casette,
     Berries(i32),
+    Level(String),
 }
 
 impl Split {
     fn is_accomplished(&self, info: &cat::Dump) -> bool {
         match info.autosplitter_info.chapter == self.chapter {
-            true => match &self.kind {
+            true => match &self.split_kind {
                 SplitKind::Level(lvl) => lvl == &info.level_name(),
                 SplitKind::Heart => info.autosplitter_info.chapter_heart,
                 SplitKind::Casette => info.autosplitter_info.chapter_cassette,
@@ -40,7 +42,11 @@ impl Split {
     }
 
     fn display_incomplete(&self, info: &cat::Dump) -> String {
-        match &self.kind {
+        if let Some(name) = &self.name {
+            return name.clone();
+        }
+
+        match &self.split_kind {
             SplitKind::Berries(num_berries) => {
                 format!(
                     "{}/{} Berries",
@@ -49,20 +55,24 @@ impl Split {
             }
             _ => {
                 let ch = self.chapter.to_string();
-                let split_kind = match &self.kind {
+                let split_kind = match &self.split_kind {
                     SplitKind::Level(level) => &level,
                     SplitKind::Heart => "Heart",
                     SplitKind::Casette => "Casette",
                     _ => unreachable!(),
                 };
-                format!("Ch. {}: {}", ch, split_kind,)
+                format!("Ch.{}: {}", ch, split_kind,)
             }
         }
     }
 
     fn display_complete(&self, finish_time: u64) -> String {
         let finish_time = std::time::Duration::from_millis(finish_time);
-        match &self.kind {
+        if let Some(name) = &self.name {
+            return format!("{} = {:#?}", name.clone(), finish_time);
+        }
+
+        match &self.split_kind {
             SplitKind::Berries(num_berries) => {
                 format!(
                     "{}/{} Berries = {:#?}",
@@ -71,7 +81,7 @@ impl Split {
             }
             _ => {
                 let ch = self.chapter.to_string();
-                let split_kind = match &self.kind {
+                let split_kind = match &self.split_kind {
                     SplitKind::Level(level) => &level,
                     SplitKind::Heart => "Heart",
                     SplitKind::Casette => "Casette",
@@ -89,11 +99,6 @@ struct CurrentSplits {
     todo_splits: Vec<Split>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Splits {
-    splits: Vec<Split>,
-}
-
 fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -104,6 +109,13 @@ fn main() {
     stdin.lock().read_line(&mut splits_path).unwrap();
     let mut here = std::env::current_dir().unwrap();
     here.push(splits_path.trim_end());
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct Splits {
+        split_mode: (String, i32),
+        splits: Vec<Split>,
+    }
+
     let splits: Splits = toml::from_str(&std::fs::read_to_string(here).unwrap()).unwrap();
 
     let mut splits = CurrentSplits {

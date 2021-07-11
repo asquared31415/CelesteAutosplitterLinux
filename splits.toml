@@ -1,7 +1,43 @@
-[[splits]]
-chapter = 2
-kind = "Heart"
+split_mode = ["IL", 2]
 
 [[splits]]
 chapter = 2
-kind = "Casette"
+name = "Mirror"
+
+[splits.split_kind]
+kind = "Level"
+kind_data = "d3"
+
+
+[[splits]]
+chapter = 2
+name = "Start Exit"
+
+[splits.split_kind]
+kind = "Level"
+kind_data = "3"
+
+
+[[splits]]
+chapter = 2
+name = "That coin room"
+
+[splits.split_kind]
+kind = "Level"
+kind_data = "7"
+
+[[splits]]
+chapter = 2
+name = "Fally"
+
+[splits.split_kind]
+kind = "Level"
+kind_data = "10"
+
+[[splits]]
+chapter = 2
+name = "Awake"
+
+[splits.split_kind]
+kind = "Level"
+kind_data = "end_0"
