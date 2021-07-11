@@ -5,11 +5,12 @@ use std::{
     time::Duration,
 };
 
-use celeste_autosplit_tracer as cat;
-use serde::{Deserialize, Serialize};
 mod term;
 
-use crate::term::TermColor;
+use crate::term::ColorName;
+use celeste_autosplit_tracer as cat;
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Split {
     pub name: Option<String>,
@@ -165,43 +166,43 @@ fn main() {
                 dump.autosplitter_info.chapter,
                 dump.level_name()
             ),
-            TermColor::Yellow,
+            ColorName::Yellow,
             None,
         );
         term::writeln(
             format!("Chapter time: {}", dump.autosplitter_info.chapter_time()),
-            TermColor::Green,
+            ColorName::Green,
             None,
         );
         term::writeln(
             format!("File time: {}", dump.autosplitter_info.file_time()),
-            TermColor::BrightMagenta,
+            ColorName::BrightMagenta,
             None,
         );
         term::writeln(
             format!("Deaths: {}", dump.death_count),
-            TermColor::Red,
+            ColorName::Red,
             None,
         );
 
         term::writeln(
             "\n################\nCompleted Splits\n################\n",
-            TermColor::White,
-            TermColor::Gray,
+            ColorName::White,
+            ColorName::Gray,
         );
 
         for split in splits.completed_splits.iter() {
-            term::writeln(split.0.display_complete(split.1), TermColor::White, None);
+            term::writeln(split.0.display_complete(split.1), ColorName::White, None);
         }
 
         term::writeln(
             "\n###########\nTODO Splits\n###########\n",
-            TermColor::White,
-            TermColor::Gray,
+            ColorName::White,
+            ColorName::Gray,
         );
 
         for split in splits.todo_splits.iter() {
-            term::writeln(split.display_incomplete(&dump), TermColor::White, None);
+            term::writeln(split.display_incomplete(&dump), ColorName::White, None);
         }
 
         thread::sleep(Duration::from_millis(12));

@@ -22,23 +22,56 @@ pub fn reset_term_style() {
         .expect("Unable to clear terminal");
 }
 
-pub fn write<S: AsRef<str>>(s: S, text_color: TermColor, bg_color: impl Into<Option<TermColor>>) {
-    let bg_color = bg_color.into();
-    print!("\x1B[{}m", text_color.as_code());
-    if let Some(bg_color) = bg_color {
-        print!("\x1B[{}m", bg_color.as_code() + 10);
+pub fn write<S: AsRef<str>, C1: Into<Option<TermColor>>, C2: Into<Option<TermColor>>>(
+    s: S,
+    text_color: C1,
+    bg_color: C2,
+) {
+    if let Some(fg_color) = text_color.into() {
+        let fg_code = match fg_color.into() {
+            TermColor::Name(name) => name.as_code().to_string(),
+            TermColor::Hex(hex) => hex.as_code(),
+        };
+        print!("\x1B[{}m", fg_code);
     }
+
+    if let Some(bg_color) = bg_color.into() {
+        let bg_code = match bg_color.into() {
+            TermColor::Name(name) => (name.as_code() + 10).to_string(),
+            TermColor::Hex(hex) => hex.as_code(),
+        };
+        print!("\x1B[{}m", bg_code);
+    }
+
     print!("{}", s.as_ref());
     reset_term_style();
 }
 
-pub fn writeln<S: AsRef<str>>(s: S, text_color: TermColor, bg_color: impl Into<Option<TermColor>>) {
+pub fn writeln<S: AsRef<str>, C1: Into<Option<TermColor>>, C2: Into<Option<TermColor>>>(
+    s: S,
+    text_color: C1,
+    bg_color: C2,
+) {
     write(s, text_color, bg_color);
-    write("\n", TermColor::White, None);
+    write("\n", ColorName::White, None);
+}
+
+pub struct HexColor(u8, u8, u8);
+
+impl HexColor {
+    pub fn as_code(&self) -> String {
+        format!("38;2;{};{};{}", self.0, self.1, self.2)
+    }
+}
+
+impl Into<Option<TermColor>> for HexColor {
+    fn into(self) -> std::option::Option<TermColor> {
+        Some(TermColor::Hex(self))
+    }
 }
 
 #[allow(dead_code)]
-pub enum TermColor {
+pub enum ColorName {
     Black,
     Red,
     Green,
@@ -57,25 +90,37 @@ pub enum TermColor {
     BrightWhite,
 }
 
-impl TermColor {
+impl ColorName {
     pub fn as_code(&self) -> u8 {
         match self {
-            TermColor::Black => 30,
-            TermColor::Red => 31,
-            TermColor::Green => 32,
-            TermColor::Yellow => 33,
-            TermColor::Blue => 34,
-            TermColor::Magenta => 35,
-            TermColor::Cyan => 36,
-            TermColor::White => 37,
-            TermColor::Gray => 90,
-            TermColor::BrightRed => 91,
-            TermColor::BrightGreen => 92,
-            TermColor::BrightYellow => 93,
-            TermColor::BrightBlue => 94,
-            TermColor::BrightMagenta => 95,
-            TermColor::BrightCyan => 96,
-            TermColor::BrightWhite => 97,
+            ColorName::Black => 30,
+            ColorName::Red => 31,
+            ColorName::Green => 32,
+            ColorName::Yellow => 33,
+            ColorName::Blue => 34,
+            ColorName::Magenta => 35,
+            ColorName::Cyan => 36,
+            ColorName::White => 37,
+            ColorName::Gray => 90,
+            ColorName::BrightRed => 91,
+            ColorName::BrightGreen => 92,
+            ColorName::BrightYellow => 93,
+            ColorName::BrightBlue => 94,
+            ColorName::BrightMagenta => 95,
+            ColorName::BrightCyan => 96,
+            ColorName::BrightWhite => 97,
         }
     }
+}
+
+impl Into<Option<TermColor>> for ColorName {
+    fn into(self) -> std::option::Option<TermColor> {
+        Some(TermColor::Name(self))
+    }
+}
+
+#[allow(dead_code)]
+pub enum TermColor {
+    Name(ColorName),
+    Hex(HexColor),
 }
