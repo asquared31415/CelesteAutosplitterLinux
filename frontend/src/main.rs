@@ -57,7 +57,7 @@ impl Split {
             _ => {
                 let ch = self.chapter.to_string();
                 let split_kind = match &self.split_kind {
-                    SplitKind::Level(level) => &level,
+                    SplitKind::Level(level) => level,
                     SplitKind::Heart => "Heart",
                     SplitKind::Casette => "Casette",
                     _ => unreachable!(),
@@ -83,7 +83,7 @@ impl Split {
             _ => {
                 let ch = self.chapter.to_string();
                 let split_kind = match &self.split_kind {
-                    SplitKind::Level(level) => &level,
+                    SplitKind::Level(level) => level,
                     SplitKind::Heart => "Heart",
                     SplitKind::Casette => "Casette",
                     _ => unreachable!(),
@@ -104,7 +104,7 @@ fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    stdout.lock().write(b"Path to splits:\n").unwrap();
+    stdout.lock().write_all(b"Path to splits:\n").unwrap();
     stdout.lock().flush().unwrap();
     let mut splits_path = String::new();
     stdin.lock().read_line(&mut splits_path).unwrap();
@@ -130,7 +130,7 @@ fn main() {
         dbg!(e);
         stdout
             .lock()
-            .write(b"Unable to find Celeste, please enter its PID: ")
+            .write_all(b"Unable to find Celeste, please enter its PID: ")
             .unwrap();
         stdout.lock().flush().unwrap();
 

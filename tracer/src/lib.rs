@@ -170,7 +170,7 @@ enum MonoTypeKind {
 
 impl MonoTypeKind {
     fn from_u8(v: u8) -> Self {
-        assert!(v >= 1 && v <= 6, "Value out of range");
+        assert!((1..=6).contains(&v), "Value out of range");
         unsafe { mem::transmute(v) }
     }
 }
@@ -401,22 +401,16 @@ impl Celeste {
                 }
             }
 
-            if asi.chapter == -1 {
+            if asi.chapter == -1 || !asi.chapter_started || asi.chapter_complete {
                 dump.in_cutscene = false;
             } else {
-                if !asi.chapter_started || asi.chapter_complete {
-                    dump.in_cutscene = false;
+                let scene = read_u64(self.instance + class_field_offset(self.engine_class, "scene"))
+                    as usize;
+                if instance_class(scene) == self.level_class {
+                    dump.in_cutscene =
+                        read_u8(scene + class_field_offset(self.level_class, "InCutscene")) != 0;
                 } else {
-                    let scene =
-                        read_u64(self.instance + class_field_offset(self.engine_class, "scene"))
-                            as usize;
-                    if instance_class(scene) == self.level_class {
-                        dump.in_cutscene =
-                            read_u8(scene + class_field_offset(self.level_class, "InCutscene"))
-                                != 0;
-                    } else {
-                        dump.in_cutscene = false;
-                    }
+                    dump.in_cutscene = false;
                 }
             }
 
@@ -506,9 +500,8 @@ impl Dump {
 
         let level_name = self.level_name();
         data.extend(level_name.bytes());
-        for _ in 0..(100 - level_name.len()) {
-            data.push(0);
-        }
+        // padding
+        data.extend(vec![0; 100 - level_name.len()]);
 
         data
     }

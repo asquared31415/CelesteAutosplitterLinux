@@ -28,7 +28,7 @@ pub fn write<S: AsRef<str>, C1: Into<Option<TermColor>>, C2: Into<Option<TermCol
     bg_color: C2,
 ) {
     if let Some(fg_color) = text_color.into() {
-        let fg_code = match fg_color.into() {
+        let fg_code = match fg_color {
             TermColor::Name(name) => name.as_code().to_string(),
             TermColor::Hex(hex) => hex.as_code(),
         };
@@ -36,7 +36,7 @@ pub fn write<S: AsRef<str>, C1: Into<Option<TermColor>>, C2: Into<Option<TermCol
     }
 
     if let Some(bg_color) = bg_color.into() {
-        let bg_code = match bg_color.into() {
+        let bg_code = match bg_color {
             TermColor::Name(name) => (name.as_code() + 10).to_string(),
             TermColor::Hex(hex) => hex.as_code(),
         };
@@ -64,9 +64,9 @@ impl HexColor {
     }
 }
 
-impl Into<Option<TermColor>> for HexColor {
-    fn into(self) -> std::option::Option<TermColor> {
-        Some(TermColor::Hex(self))
+impl From<HexColor> for Option<TermColor> {
+    fn from(c: HexColor) -> Self {
+        Some(TermColor::Hex(c))
     }
 }
 
@@ -113,9 +113,9 @@ impl ColorName {
     }
 }
 
-impl Into<Option<TermColor>> for ColorName {
-    fn into(self) -> std::option::Option<TermColor> {
-        Some(TermColor::Name(self))
+impl From<ColorName> for Option<TermColor> {
+    fn from(c: ColorName) -> Self {
+        Some(TermColor::Name(c))
     }
 }
 
