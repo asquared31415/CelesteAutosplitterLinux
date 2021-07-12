@@ -40,7 +40,7 @@ impl MemPtr {
         let mut buf = [0_u8; mem::size_of::<T>()];
         mem_file
             .read_exact(&mut buf)
-            .expect(&format!("Unable to read memory at {:#X}", self.0));
+            .unwrap_or_else(|_| panic!("Unable to read memory at {:#X}", self.0));
         unsafe { *(buf.as_ptr() as *const T) }
     }
 
@@ -66,7 +66,7 @@ impl MemPtr {
         };
         mem_file
             .read_exact(&mut out)
-            .expect(&format!("Unable to read memory at {:#X}", self.0));
+            .unwrap_or_else(|_| panic!("Unable to read memory at {:#X}", self.0));
     }
 }
 
@@ -284,7 +284,7 @@ pub fn find_celeste() -> Result<i32, PIDError> {
 
 fn load_mem(pid: i32) -> File {
     let path = PathBuf::from(format!("/proc/{}/mem", pid));
-    File::open(path).expect(&format!("Unable to open mem file for process {}", pid))
+    File::open(path).unwrap_or_else(|_| panic!("Unable to open mem file for process {}", pid))
 }
 
 static MEM_FILE: OnceCell<Arc<Mutex<Option<File>>>> = OnceCell::new();
