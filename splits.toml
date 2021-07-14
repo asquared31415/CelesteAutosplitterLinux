@@ -26,6 +26,7 @@ name = "That coin room"
 kind = "Level"
 kind_data = "7"
 
+
 [[splits]]
 chapter = 2
 name = "Fally"
@@ -34,6 +35,7 @@ name = "Fally"
 kind = "Level"
 kind_data = "10"
 
+
 [[splits]]
 chapter = 2
 name = "Awake"
@@ -41,3 +43,11 @@ name = "Awake"
 [splits.split_kind]
 kind = "Level"
 kind_data = "end_0"
+
+
+[[splits]]
+chapter = 2
+name = "UwU PB pls"
+
+[splits.split_kind]
+kind = "ChapterComplete"

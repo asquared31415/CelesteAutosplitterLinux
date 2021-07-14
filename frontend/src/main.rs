@@ -11,6 +11,13 @@ use crate::term::ColorName;
 use celeste_autosplit_tracer as cat;
 use serde::{Deserialize, Serialize};
 
+fn duration_to_m_s_ms(duration: Duration) -> (u64, u64, u32) {
+    let m = duration.as_secs() / 60;
+    let s = duration.as_secs() % 60;
+    let ms = duration.subsec_millis();
+    (m, s, ms)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Split {
     pub name: Option<String>,
@@ -25,6 +32,7 @@ pub enum SplitKind {
     Casette,
     Berries(i32),
     Level(String),
+    ChapterComplete,
 }
 
 impl Split {
@@ -37,6 +45,7 @@ impl Split {
                 &SplitKind::Berries(bewwy_count) => {
                     bewwy_count == info.autosplitter_info.chapter_strawberries
                 }
+                SplitKind::ChapterComplete => info.autosplitter_info.chapter_complete,
             },
             false => false,
         }
@@ -47,50 +56,44 @@ impl Split {
             return name.clone();
         }
 
-        match &self.split_kind {
+        let ch = self.chapter.to_string();
+        let split_kind = match &self.split_kind {
+            SplitKind::Level(level) => level,
+            SplitKind::Heart => "Heart",
+            SplitKind::Casette => "Casette",
+            SplitKind::ChapterComplete => "Complete",
             SplitKind::Berries(num_berries) => {
-                format!(
+                return format!(
                     "{}/{} Berries",
                     info.autosplitter_info.file_strawberries, num_berries
-                )
+                );
             }
-            _ => {
-                let ch = self.chapter.to_string();
-                let split_kind = match &self.split_kind {
-                    SplitKind::Level(level) => level,
-                    SplitKind::Heart => "Heart",
-                    SplitKind::Casette => "Casette",
-                    _ => unreachable!(),
-                };
-                format!("Ch.{}: {}", ch, split_kind,)
-            }
-        }
+        };
+        format!("Ch.{}: {}", ch, split_kind,)
     }
 
     fn display_complete(&self, finish_time: u64) -> String {
         let finish_time = std::time::Duration::from_millis(finish_time);
+        let (m, s, ms) = duration_to_m_s_ms(finish_time);
+
         if let Some(name) = &self.name {
-            return format!("{} = {:#?}", name.clone(), finish_time);
+            return format!("{} = {}:{}.{}s", name.clone(), m, s, ms);
         }
 
-        match &self.split_kind {
+        let ch = self.chapter.to_string();
+        let split_kind = match &self.split_kind {
+            SplitKind::Level(level) => level,
+            SplitKind::Heart => "Heart",
+            SplitKind::Casette => "Casette",
+            SplitKind::ChapterComplete => "Complete",
             SplitKind::Berries(num_berries) => {
-                format!(
+                return format!(
                     "{}/{} Berries = {:#?}",
                     num_berries, num_berries, finish_time
-                )
+                );
             }
-            _ => {
-                let ch = self.chapter.to_string();
-                let split_kind = match &self.split_kind {
-                    SplitKind::Level(level) => level,
-                    SplitKind::Heart => "Heart",
-                    SplitKind::Casette => "Casette",
-                    _ => unreachable!(),
-                };
-                format!("Ch.{}: {} = {:#?}", ch, split_kind, finish_time)
-            }
-        }
+        };
+        format!("Ch.{}: {} = {:#?}", ch, split_kind, finish_time)
     }
 }
 
@@ -169,8 +172,10 @@ fn main() {
             ColorName::Yellow,
             None,
         );
+        let (m, s, ms) =
+            duration_to_m_s_ms(Duration::from_millis(dump.autosplitter_info.chapter_time()));
         term::writeln(
-            format!("Chapter time: {}", dump.autosplitter_info.chapter_time()),
+            format!("Chapter time: {}:{}.{}s", m, s, ms),
             ColorName::Green,
             None,
         );
