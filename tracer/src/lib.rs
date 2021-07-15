@@ -16,6 +16,9 @@ use std::{
 mod tracer;
 use crate::tracer::*;
 
+#[cfg(not(target_os = "linux"))]
+compile_error!("This program does not support non-linux OSes, please use a Linux OS :)");
+
 #[derive(Clone, Copy, Debug)]
 pub enum PIDError {
     NotFound,
