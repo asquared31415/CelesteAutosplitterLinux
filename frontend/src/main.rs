@@ -11,11 +11,21 @@ use crate::term::ColorName;
 use celeste_autosplit_tracer as cat;
 use serde::{Deserialize, Serialize};
 
-fn duration_to_m_s_ms(duration: Duration) -> (u64, u64, u32) {
+pub fn duration_to_m_s_ms(duration: Duration) -> (u64, u64, u32) {
     let m = duration.as_secs() / 60;
     let s = duration.as_secs() % 60;
     let ms = duration.subsec_millis();
     (m, s, ms)
+}
+
+pub fn format_time(duration: Duration) -> String {
+    let (m, s, ms) = duration_to_m_s_ms(duration);
+    format!("{:0>2}:{:0>2}.{:0>3}", m, s, ms)
+}
+
+pub fn format_time_with_units(duration: Duration) -> String {
+    let (m, s, ms) = duration_to_m_s_ms(duration);
+    format!("{:0>2}m {:0>2}.{:0>3}s", m, s, ms)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,10 +84,9 @@ impl Split {
 
     fn display_complete(&self, finish_time: u64) -> String {
         let finish_time = std::time::Duration::from_millis(finish_time);
-        let (m, s, ms) = duration_to_m_s_ms(finish_time);
 
         if let Some(name) = &self.name {
-            return format!("{} = {}:{}.{}s", name.clone(), m, s, ms);
+            return format!("{} = {}", name.clone(), format_time_with_units(finish_time));
         }
 
         let ch = self.chapter.to_string();
@@ -172,15 +181,21 @@ fn main() {
             ColorName::Yellow,
             None,
         );
-        let (m, s, ms) =
-            duration_to_m_s_ms(Duration::from_millis(dump.autosplitter_info.chapter_time()));
+
         term::writeln(
-            format!("Chapter time: {}:{}.{}s", m, s, ms),
+            format!(
+                "Chapter time: {}",
+                format_time(Duration::from_millis(dump.autosplitter_info.chapter_time()))
+            ),
             ColorName::Green,
             None,
         );
+
         term::writeln(
-            format!("File time: {}", dump.autosplitter_info.file_time()),
+            format!(
+                "File time: {}",
+                format_time(Duration::from_millis(dump.autosplitter_info.file_time()))
+            ),
             ColorName::BrightMagenta,
             None,
         );
