@@ -8,7 +8,7 @@ use std::{
 
 use once_cell::sync::OnceCell;
 
-pub fn load_mem(pid: i32) -> File {
+pub fn load_mem(pid: u32) -> File {
     let path = PathBuf::from(format!("/proc/{}/mem", pid));
     File::open(path).unwrap_or_else(|_| panic!("Unable to open mem file for process {}", pid))
 }

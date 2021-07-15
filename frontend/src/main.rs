@@ -1,5 +1,6 @@
 use std::{
     fmt::Debug,
+    fs::File,
     io::{self, BufRead, Write},
     thread,
     time::Duration,
@@ -9,6 +10,8 @@ mod term;
 
 use crate::term::ColorName;
 use celeste_autosplit_tracer as cat;
+use clap::{crate_version, App, Arg};
+use dialoguer::{Input, Select};
 use serde::{Deserialize, Serialize};
 
 pub fn duration_to_m_s_ms(duration: Duration) -> (u64, u64, u32) {
@@ -35,7 +38,7 @@ pub struct Split {
     pub split_kind: SplitKind,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "kind_data")]
 pub enum SplitKind {
     Heart,
@@ -61,12 +64,43 @@ impl Split {
         }
     }
 
+    fn display_long(&self) -> String {
+        let name = if let Some(name) = &self.name {
+            format!("{}\n  ", name)
+        } else {
+            String::new()
+        };
+
+        let split_info = match &self.split_kind {
+            SplitKind::Heart => "Heart".to_string(),
+            SplitKind::Casette => "Casette".to_string(),
+            SplitKind::Berries(num) => format!("{} Berries", num),
+            SplitKind::Level(room) => format!("Room {}", room),
+            SplitKind::ChapterComplete => "Complete".to_string(),
+        };
+        format!("{}Cp. {} {}", name, self.chapter, split_info)
+    }
+
+    fn display_short(&self) -> String {
+        if let Some(name) = &self.name {
+            return name.to_string();
+        }
+
+        let split_info = match &self.split_kind {
+            SplitKind::Heart => "Heart".to_string(),
+            SplitKind::Casette => "Casette".to_string(),
+            SplitKind::Berries(num) => format!("{} Berries", num),
+            SplitKind::Level(room) => format!("Room {}", room),
+            SplitKind::ChapterComplete => "Complete".to_string(),
+        };
+        format!("Cp. {} {}", self.chapter, split_info)
+    }
+
     fn display_incomplete(&self, info: &cat::Dump) -> String {
         if let Some(name) = &self.name {
             return name.clone();
         }
 
-        let ch = self.chapter.to_string();
         let split_kind = match &self.split_kind {
             SplitKind::Level(level) => level,
             SplitKind::Heart => "Heart",
@@ -79,7 +113,7 @@ impl Split {
                 );
             }
         };
-        format!("Ch.{}: {}", ch, split_kind,)
+        format!("Ch.{}: {}", self.chapter, split_kind,)
     }
 
     fn display_complete(&self, finish_time: u64) -> String {
@@ -89,7 +123,6 @@ impl Split {
             return format!("{} = {}", name.clone(), format_time_with_units(finish_time));
         }
 
-        let ch = self.chapter.to_string();
         let split_kind = match &self.split_kind {
             SplitKind::Level(level) => level,
             SplitKind::Heart => "Heart",
@@ -102,7 +135,7 @@ impl Split {
                 );
             }
         };
-        format!("Ch.{}: {} = {:#?}", ch, split_kind, finish_time)
+        format!("Ch.{}: {} = {:#?}", self.chapter, split_kind, finish_time)
     }
 }
 
@@ -112,46 +145,353 @@ struct CurrentSplits {
     todo_splits: Vec<Split>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Splits {
+    split_mode: (String, i32),
+    splits: Vec<Split>,
+}
+
 fn main() {
+    let arg_matches = App::new("CelesteAutosplitter")
+        .version(crate_version!())
+        .arg_from_usage("[splits] -s --splits [path] 'the path to the splits file'")
+        // currently broken :(
+        //.arg_from_usage("[celeste] -c --celeste [path] 'the path to the celeste binary to automatically launch and trace without needing root'")
+        .arg(
+            Arg::with_name("edit-splits")
+                .help("iteractive editor for the splits file")
+                .short("e")
+                .long("edit-splits")
+                .conflicts_with("celeste"),
+        )
+        .get_matches();
+
     let stdin = io::stdin();
     let stdout = io::stdout();
 
-    stdout.lock().write_all(b"Path to splits:\n").unwrap();
-    stdout.lock().flush().unwrap();
-    let mut splits_path = String::new();
-    stdin.lock().read_line(&mut splits_path).unwrap();
-    let mut here = std::env::current_dir().unwrap();
-    here.push(splits_path.trim_end());
+    let path = if let Some(splits_path) = arg_matches.value_of("splits") {
+        println!("Using passed split path: `{}`", splits_path);
+        splits_path.to_string()
+    } else {
+        stdout.lock().write_all(b"Path to splits:\n").unwrap();
+        stdout.lock().flush().unwrap();
+        let mut input_path = String::new();
+        stdin.lock().read_line(&mut input_path).unwrap();
+        input_path.trim().to_string()
+    };
 
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Splits {
-        split_mode: (String, i32),
-        splits: Vec<Split>,
+    if arg_matches.is_present("edit-splits") {
+        splits_menu(&path);
+    } else {
+        display_timer(&path);
     }
+}
 
-    let splits: Splits = toml::from_str(&std::fs::read_to_string(here).unwrap()).unwrap();
+fn write_splits(splits: &Splits, splits_path: &str) {
+    let splits_str = toml::to_string_pretty(&splits).expect("Failed to serialize");
+    // TODO: keep backup first?
+    // Create or truncate the file
+    let mut file = File::create(splits_path).expect("Unable to open file");
+    file.write_all(splits_str.as_bytes())
+        .expect("Failed to write to file");
+}
+
+fn splits_menu(splits_path: &str) {
+    let mut splits: Splits = toml::from_str(
+        &std::fs::read_to_string(splits_path)
+            .unwrap_or_else(|_| panic!("Unable to read splits file at `{}`", splits_path)),
+    )
+    .unwrap_or_else(|_| panic!("Unable to parse splits file `{}`", splits_path));
+
+    loop {
+        let selection = Select::new()
+            .items(&["Show Current", "Edit", "Done"])
+            .default(0)
+            .interact()
+            .expect("Unable to display options");
+
+        match selection {
+            0 => {
+                term::writeln("Current Splits", ColorName::Cyan, None);
+                for split in splits.splits.iter() {
+                    println!("{}\n", split.display_long());
+                }
+            }
+            1 => edit_menu(&mut splits, splits_path),
+            2 => {
+                break;
+            }
+            _ => {
+                unreachable!("encountered an invalid selection")
+            }
+        }
+    }
+}
+
+fn edit_menu(splits: &mut Splits, splits_path: &str) {
+    loop {
+        let choice = Select::new()
+            .with_prompt("What to edit (press `q` to cancel)")
+            .items(&["Add", "Delete", "Edit/Move"])
+            .default(0)
+            .interact_opt()
+            .expect("Unable to display options");
+
+        if let Some(choice) = choice {
+            match choice {
+                0 => {
+                    let name: String = Input::new()
+                        .allow_empty(true)
+                        .with_prompt("Split name (press enter to leave empty)")
+                        .interact_text()
+                        .expect("Unable to display prompt");
+                    let name = if name.is_empty() { None } else { Some(name) };
+
+                    let chapter: i32 = Input::new()
+                        .with_prompt("What chapter is this split for?")
+                        .interact_text()
+                        .expect("Unable to display prompt");
+
+                    let kind_idx = Select::new()
+                        .with_prompt("What sort of split is this?")
+                        .default(0)
+                        .items(&["Chapter Complete", "Heart", "Casette", "Berries", "Room"])
+                        .interact()
+                        .expect("Unable to display prompt");
+                    let kind = match kind_idx {
+                        0 => SplitKind::ChapterComplete,
+                        1 => SplitKind::Heart,
+                        2 => SplitKind::Casette,
+                        3 => {
+                            let berries: i32 = Input::new()
+                                .with_prompt("How many berries")
+                                .interact_text()
+                                .expect("Unable to display prompt");
+                            SplitKind::Berries(berries)
+                        }
+                        4 => {
+                            let room: String = Input::new()
+                                .with_prompt("Room name")
+                                .interact_text()
+                                .expect("Unable to display prompt");
+                            SplitKind::Level(room)
+                        }
+                        _ => {
+                            unreachable!("encountered an invalid selection")
+                        }
+                    };
+
+                    let split = Split {
+                        name,
+                        chapter,
+                        split_kind: kind,
+                    };
+
+                    // TODO: sort splits
+                    splits.splits.push(split);
+                    write_splits(splits, splits_path);
+                }
+                1 => {
+                    term::writeln(
+                        "Which split do you want to remove? (press `q` to cancel)",
+                        ColorName::BrightRed,
+                        None,
+                    );
+                    let idx = Select::new()
+                        .default(0)
+                        .items(
+                            &splits
+                                .splits
+                                .iter()
+                                .map(|s| s.display_short())
+                                .collect::<Vec<String>>(),
+                        )
+                        .interact_opt()
+                        .expect("Unable to display prompt");
+
+                    if let Some(idx) = idx {
+                        splits.splits.remove(idx);
+
+                        write_splits(splits, splits_path);
+                    }
+                }
+                2 => {
+                    term::writeln(
+                        "Which split do you want to edit or move? (press `q` to cancel)",
+                        ColorName::Blue,
+                        None,
+                    );
+                    let idx = Select::new()
+                        .default(0)
+                        .items(
+                            &splits
+                                .splits
+                                .iter()
+                                .map(|s| s.display_short())
+                                .collect::<Vec<String>>(),
+                        )
+                        .interact_opt()
+                        .expect("Unable to display prompt");
+                    if let Some(idx) = idx {
+                        let mut items = vec!["Move up", "Move down", "Edit"];
+
+                        if idx == 0 {
+                            items.remove(0);
+                        }
+                        if idx == splits.splits.len() - 1 {
+                            if items.len() == 3 {
+                                items.remove(1);
+                            } else {
+                                items.remove(0);
+                            }
+                        }
+
+                        let mut select = Select::new();
+                        select.with_prompt("Do what (press q to cancel)");
+                        select.default(0);
+                        select.items(&items);
+
+                        let choice = select.interact_opt().expect("Unable to display prompt");
+
+                        if let Some(choice_idx) = choice {
+                            dbg!(choice);
+                            let choice = items[choice_idx];
+                            match choice {
+                                "Move up" => splits.splits.swap(idx, idx - 1),
+                                "Move down" => splits.splits.swap(idx, idx + 1),
+                                "Edit" => loop {
+                                    let choice = Select::new()
+                                        .with_prompt("Edit what (press `q` to cancel)")
+                                        .default(0)
+                                        .items(&["Edit title", "Edit chapter", "Edit split kind"])
+                                        .interact_opt()
+                                        .expect("Unable to display prompt");
+
+                                    if let Some(choice) = choice {
+                                        match choice {
+                                            0 => {
+                                                let name: String = Input::new()
+                                                    .allow_empty(true)
+                                                    .with_prompt(
+                                                        "Split name (press enter to leave empty)",
+                                                    )
+                                                    .interact_text()
+                                                    .expect("Unable to display prompt");
+
+                                                splits.splits[idx].name =
+                                                    if name.is_empty() { None } else { Some(name) };
+                                            }
+                                            1 => {
+                                                let chapter: i32 = Input::new()
+                                                    .with_prompt("What chapter is this split for?")
+                                                    .interact_text()
+                                                    .expect("Unable to display prompt");
+
+                                                splits.splits[idx].chapter = chapter;
+                                            }
+                                            2 => {
+                                                let kind_idx = Select::new()
+                                                    .with_prompt("What sort of split is this?")
+                                                    .default(0)
+                                                    .items(&[
+                                                        "Chapter Complete",
+                                                        "Heart",
+                                                        "Casette",
+                                                        "Berries",
+                                                        "Room",
+                                                    ])
+                                                    .interact()
+                                                    .expect("Unable to display prompt");
+                                                let kind = match kind_idx {
+                                                    0 => SplitKind::ChapterComplete,
+                                                    1 => SplitKind::Heart,
+                                                    2 => SplitKind::Casette,
+                                                    3 => {
+                                                        let berries: i32 = Input::new()
+                                                            .with_prompt("How many berries")
+                                                            .interact_text()
+                                                            .expect("Unable to display prompt");
+                                                        SplitKind::Berries(berries)
+                                                    }
+                                                    4 => {
+                                                        let room: String = Input::new()
+                                                            .with_prompt("Room name")
+                                                            .interact_text()
+                                                            .expect("Unable to display prompt");
+                                                        SplitKind::Level(room)
+                                                    }
+                                                    _ => {
+                                                        unreachable!(
+                                                            "encountered an invalid selection"
+                                                        )
+                                                    }
+                                                };
+
+                                                splits.splits[idx].split_kind = kind;
+                                            }
+                                            _ => {
+                                                unreachable!("encountered an invalid selection")
+                                            }
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                },
+                                _ => {
+                                    unreachable!("encountered an invalid selection")
+                                }
+                            }
+                        }
+
+                        write_splits(splits, splits_path);
+                    }
+                }
+                _ => {
+                    unreachable!("encountered an invalid selection")
+                }
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+fn display_timer(splits_path: &str) {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+
+    let splits: Splits = toml::from_str(
+        &std::fs::read_to_string(splits_path)
+            .unwrap_or_else(|_| panic!("Unable to read splits file at `{}`", splits_path)),
+    )
+    .unwrap_or_else(|_| panic!("Unable to parse splits file `{}`", splits_path));
 
     let mut splits = CurrentSplits {
         completed_splits: vec![],
         todo_splits: splits.splits,
     };
 
-    let found_pid = cat::find_celeste();
+    let celeste_pid = cat::find_celeste();
 
-    let pid = found_pid.unwrap_or_else(|e| {
-        dbg!(e);
+    let pid = celeste_pid.unwrap_or_else(|_| {
         stdout
             .lock()
             .write_all(b"Unable to find Celeste, please enter its PID: ")
             .unwrap();
         stdout.lock().flush().unwrap();
 
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line).unwrap();
+        loop {
+            let mut line = String::new();
+            stdin.lock().read_line(&mut line).unwrap();
 
-        line.trim_end()
-            .parse::<i32>()
-            .expect("enter a number u dingus")
+            match line.trim_end().parse::<u32>() {
+                Ok(pid) => return pid,
+                Err(_) => {
+                    stdout.lock().write_all(b"Please enter a number: ").unwrap();
+                    stdout.lock().flush().unwrap();
+                }
+            }
+        }
     });
 
     let celeste = cat::Celeste::new(pid);

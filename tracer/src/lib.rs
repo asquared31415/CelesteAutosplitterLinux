@@ -25,7 +25,7 @@ pub enum PIDError {
     IOError,
 }
 
-pub fn find_celeste() -> Result<i32, PIDError> {
+pub fn find_celeste() -> Result<u32, PIDError> {
     for dir in fs::read_dir(Path::new("/proc/")).unwrap() {
         if let Ok(dir) = dir {
             if let Ok(file_type) = dir.file_type() {
@@ -68,7 +68,7 @@ pub struct Celeste {
 }
 
 impl Celeste {
-    fn init(pid: i32) -> usize {
+    fn init(pid: u32) -> usize {
         MEM_FILE.get_or_init(|| Arc::new(Mutex::new(Some(load_mem(pid)))));
 
         unsafe {
@@ -95,7 +95,7 @@ impl Celeste {
         }
     }
 
-    pub fn new(pid: i32) -> Self {
+    pub fn new(pid: u32) -> Self {
         let domain = Self::init(pid);
         unsafe {
             let assembly = read_u64(domain + 0xD0) as usize;
@@ -273,7 +273,7 @@ impl Dump {
     }
 }
 
-pub fn dump_info_loop(output_file: &str, pid: i32) {
+pub fn dump_info_loop(output_file: &str, pid: u32) {
     let mut output = File::create(output_file).expect("Could not create output file");
     let celeste = Celeste::new(pid);
     loop {
