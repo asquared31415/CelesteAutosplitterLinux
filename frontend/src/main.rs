@@ -354,7 +354,6 @@ fn edit_menu(splits: &mut Splits, splits_path: &str) {
                         let choice = select.interact_opt().expect("Unable to display prompt");
 
                         if let Some(choice_idx) = choice {
-                            dbg!(choice);
                             let choice = items[choice_idx];
                             match choice {
                                 "Move up" => splits.splits.swap(idx, idx - 1),
