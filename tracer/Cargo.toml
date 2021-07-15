@@ -1,5 +1,5 @@
 [package]
-name = "celeste-autosplit-tracer"
+name = "celeste_autosplit_tracer"
 version = "0.1.0"
 edition = "2018"
 

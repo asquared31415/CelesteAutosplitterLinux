@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "celeste-autosplit-tracer"
+name = "celeste_autosplit_tracer"
 version = "0.1.0"
 dependencies = [
  "once_cell",
@@ -13,7 +13,7 @@ dependencies = [
 name = "frontend"
 version = "0.1.0"
 dependencies = [
- "celeste-autosplit-tracer",
+ "celeste_autosplit_tracer",
  "serde",
  "toml",
 ]
