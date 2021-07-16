@@ -11,6 +11,19 @@ pub fn clear() {
         .expect("Unable to clear terminal");
 }
 
+#[allow(dead_code)] // possibly useful later
+pub fn clear_lines(lines: u32) {
+    const CLEAR_CODE: &[u8] = b"\x1B[0J";
+
+    print!("\x1B[{}A", lines);
+
+    let stdout = io::stdout();
+    stdout
+        .lock()
+        .write_all(CLEAR_CODE)
+        .expect("Unable to clear lines");
+}
+
 pub fn reset_term_style() {
     const RESET_CODE: &[u8] = b"\x1B[0m";
 
