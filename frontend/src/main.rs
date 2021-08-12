@@ -368,7 +368,7 @@ fn display_timer(splits_path: &str) {
             }
         }
 
-        term::clear();
+        //term::clear();
 
         if dump.autosplitter_info.chapter == -1 {
             term::writeln("No Chapter", ColorName::Yellow, None);

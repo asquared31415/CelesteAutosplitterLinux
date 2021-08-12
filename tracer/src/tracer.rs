@@ -178,7 +178,7 @@ enum MonoTypeKind {
 
 impl MonoTypeKind {
     fn from_u8(v: u8) -> Self {
-        assert!((1..=6).contains(&v), "Value out of range");
+        assert!((1..=6).contains(&v), "Value out of range: {}", v);
         unsafe { mem::transmute(v) }
     }
 }

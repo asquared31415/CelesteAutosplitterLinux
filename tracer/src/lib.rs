@@ -129,6 +129,29 @@ impl Celeste {
 
     pub fn get_data(&self) -> Dump {
         unsafe {
+            // Looks like the assembly should always start with 0x0000000000000001
+            // Not entirely foolproof, but might allow for better detection of closing
+            if read_u64(self.assembly) != 1 {
+                // Dump some info for possible debug purposes if env is set
+                if let Some(backtrace) = option_env!("RUST_BACKTRACE") {
+                    if !backtrace.is_empty() {
+                        println!("Assembly at {:#08X} didn't match expected first 8 bytes.  Dumping first KiB:", self.assembly);
+                        let mut buf = vec![0_u8; 1024];
+                        MemPtr::new(self.assembly).read_into(&mut buf);
+                        buf.set_len(1024);
+
+                        for i in 0..64 {
+                            for j in 0..16 {
+                                print!("{:02X} ", buf[i * 16 + j]);
+                            }
+                            println!();
+                        }
+                    }
+                }
+
+                process::exit(1);
+            }
+
             let asi: AutosplitterInfo = MemPtr::new(self.autosplitter_info).read();
 
             let mut dump = Dump {
@@ -193,7 +216,9 @@ impl Celeste {
 impl Drop for Celeste {
     fn drop(&mut self) {
         if let Some(f) = MEM_FILE.get() {
-            *f.lock().expect("Unable to lock mem file") = None;
+            if let Ok(mut file) = f.lock() {
+                *file = None;
+            }
         }
     }
 }
