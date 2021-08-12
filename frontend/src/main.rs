@@ -422,15 +422,6 @@ fn display_timer(splits_path: &str) {
             term::writeln(split.display_incomplete(&dump), ColorName::White, None);
         }
 
-        if matches!(
-            console::Term::stdout()
-                .read_char()
-                .expect("unable to read key from terminal"),
-            'q' | 'Q'
-        ) {
-            process::exit(0);
-        }
-
         thread::sleep(Duration::from_millis(12));
     }
 }
