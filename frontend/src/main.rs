@@ -1,8 +1,10 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
 use std::{
     fmt::Debug,
     fs::File,
     io::{self, BufRead, Write},
-    thread,
+    process, thread,
     time::Duration,
 };
 
@@ -478,6 +480,15 @@ fn display_timer(splits_path: &str) {
 
     let celeste = cat::Celeste::new(pid);
 
+    term::clear();
+    term::writeln(
+        "Starting autosplitter.  Press `q` at any time to exit.",
+        None,
+        None,
+    );
+
+    thread::sleep(Duration::from_secs(5));
+
     loop {
         let dump = celeste.get_data();
 
@@ -545,6 +556,15 @@ fn display_timer(splits_path: &str) {
 
         for split in splits.todo_splits.iter() {
             term::writeln(split.display_incomplete(&dump), ColorName::White, None);
+        }
+
+        if matches!(
+            console::Term::stdout()
+                .read_char()
+                .expect("unable to read key from terminal"),
+            'q' | 'Q'
+        ) {
+            process::exit(0);
         }
 
         thread::sleep(Duration::from_millis(12));
