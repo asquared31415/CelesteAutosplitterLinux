@@ -7,6 +7,7 @@ use std::{
     io::{Seek, SeekFrom, Write},
     mem,
     path::Path,
+    process,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -80,18 +81,22 @@ impl Celeste {
             let first_domain_name = read_string(first_domain_name_ptr as usize);
 
             if first_domain_name != "Celeste.exe" {
-                panic!("This is not celeste!");
+                eprintln!("This is not celeste!  Found {}", first_domain_name);
+                process::exit(1);
             }
 
             let second_domain = read_u64(domains_list + 8) as usize;
-            let second_domain_name_ptr = read_u64(second_domain + 0xD8) as usize;
-            // TODO: this could probably cause Bad Things and spicy UB if it doesn't exist
-            // but it does so
-            let second_domain_name = read_string(second_domain_name_ptr as usize);
 
-            println!("Connected to {}", second_domain_name);
-            // TODO: fallback to first domain?
-            second_domain
+            let (domain, name) = if second_domain != 0 {
+                let second_domain_name_ptr = read_u64(second_domain + 0xD8) as usize;
+                let second_domain_name = read_string(second_domain_name_ptr as usize);
+                (second_domain, second_domain_name)
+            } else {
+                (first_domain, first_domain_name)
+            };
+
+            println!("Connected to {}", name);
+            domain
         }
     }
 

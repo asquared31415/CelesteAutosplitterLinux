@@ -1,8 +1,9 @@
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{self, Read, Seek, SeekFrom},
     mem,
     path::PathBuf,
+    process,
     sync::{Arc, Mutex},
 };
 
@@ -10,7 +11,14 @@ use once_cell::sync::OnceCell;
 
 pub fn load_mem(pid: u32) -> File {
     let path = PathBuf::from(format!("/proc/{}/mem", pid));
-    File::open(path).unwrap_or_else(|_| panic!("Unable to open mem file for process {}", pid))
+    File::open(path).unwrap_or_else(|e| {
+        if let io::ErrorKind::PermissionDenied = e.kind() {
+            eprintln!("Permission to access memory file for {} denied", pid);
+            process::exit(1);
+        } else {
+            panic!("Unable to open mem file for process {}: {}", pid, e);
+        }
+    })
 }
 
 pub static MEM_FILE: OnceCell<Arc<Mutex<Option<File>>>> = OnceCell::new();
