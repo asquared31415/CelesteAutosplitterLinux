@@ -3,7 +3,7 @@
 use std::{
     fs::File,
     io::{self, BufRead, Write},
-    process, thread,
+    thread,
     time::Duration,
 };
 
@@ -369,15 +369,20 @@ fn display_timer(splits_path: &str) {
         }
 
         term::clear();
-        term::writeln(
-            format!(
-                "Chapter {} room {}",
-                dump.autosplitter_info.chapter,
-                dump.level_name()
-            ),
-            ColorName::Yellow,
-            None,
-        );
+
+        if dump.autosplitter_info.chapter == -1 {
+            term::writeln("No Chapter", ColorName::Yellow, None);
+        } else {
+            term::writeln(
+                format!(
+                    "Chapter {} room {}",
+                    dump.autosplitter_info.chapter,
+                    dump.level_name()
+                ),
+                ColorName::Yellow,
+                None,
+            );
+        }
 
         term::writeln(
             format!(
